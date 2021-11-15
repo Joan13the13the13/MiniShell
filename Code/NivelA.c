@@ -55,6 +55,10 @@ char *read_line(char *line);
 int parse_args(char **args, char *line);
 int execute_line(char *line);
 
+//métodos añadidos por nosotros
+void initJL();
+void updtJL();
+
 static char mi_shell[COMMAND_LINE_SIZE]; //variable global para guardar el nombre del minishell
 
 //static pid_t foreground_pid = 0;
@@ -190,6 +194,17 @@ int execute_line(char *line) {
         if (check_internal(args)) {
             return 1;
         }
+        pid=fork();//creamos un proceso hijo
+        execvp(args[0],args);
+        //Miramos si el proceso hijo se ha creado correctamente
+        if(pid < 0){
+            fprintf(stderr, "No se ha podido crear el proceso hijo");
+            exit(-1);
+        }
+
+        //Actualizamos la información del proceso padre
+        updtJL(args[0]);
+
         #if DEBUGN3
             fprintf(stderr, GRIS "[execute_line()→ PID padre: %d]\n" RESET_FORMATO, getpid());
         #endif
@@ -197,9 +212,36 @@ int execute_line(char *line) {
     return 0;
 }
 
+void updtJL(char *args){
+    //actualizamos el pid con el pid del proceso hijo
+    jobs_list[0].pid = getpid();
+    //actualizamos el status a 'E'
+    jobs_list[0].status = 'E';
+    //actualizamos el cmd con el proceso hijo
+    strcpy(jobs_list[0].cmd, args[0]);
+}
+
+void initJL(){
+    //Ponemos el pid a 0
+    jobs_list[0].pid = 0;
+    //Ponemos el status a N
+    //strcpy(jobs_list[0].status,'N');
+    jobs_list[0].status='N';
+    //Ponemos todo \0 en el cmd de jobs list
+    memset(jobs_list[0].cmd,'\0',sizeof(jobs_list[0].cmd));
+}
+
 int main(int argc, char *argv[]) {
     char line[COMMAND_LINE_SIZE];
     memset(line, 0, COMMAND_LINE_SIZE);
+
+    //Introducios dentro de mi_shell el nombre del programa
+    strcpy(mi_shell,argv[0]);
+    
+
+    //Inicializamos jobs_list[0]
+    initJL();
+
     while (1) {
         if (read_line(line)) { // !=NULL
             execute_line(line);
