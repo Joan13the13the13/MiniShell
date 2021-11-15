@@ -195,16 +195,21 @@ int execute_line(char *line) {
             return 1;
         }
         pid=fork();//creamos un proceso hijo
-        execvp(args[0],args);
-        //Miramos si el proceso hijo se ha creado correctamente
-        if(pid < 0){
-            fprintf(stderr, "No se ha podido crear el proceso hijo");
+        if(pid==0){
+            execvp(args[0],args);
+            fprintf(stderr, "No se ha ejecutado correctamente el execvp.");
             exit(-1);
+        }else if (pid>0) {
+            printf("Soy el proceso padre, actualizare jobs_list[0]");
+            //Actualizamos la información del proceso padre
+            updtJL(args[0], pid);
+            wait(NULL);
+            initJL();
         }
+        
 
-        //Actualizamos la información del proceso padre
-        updtJL(args[0]);
-
+        //esperamos a la confirmación del cambio de estado del hijo
+        //wait(NULL);
         #if DEBUGN3
             fprintf(stderr, GRIS "[execute_line()→ PID padre: %d]\n" RESET_FORMATO, getpid());
         #endif
@@ -212,9 +217,9 @@ int execute_line(char *line) {
     return 0;
 }
 
-void updtJL(char *args){
+void updtJL(char *args, pid_t pid){
     //actualizamos el pid con el pid del proceso hijo
-    jobs_list[0].pid = getpid();
+    jobs_list[0].pid = pid;
     //actualizamos el status a 'E'
     jobs_list[0].status = 'E';
     //actualizamos el cmd con el proceso hijo
