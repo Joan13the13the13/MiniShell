@@ -275,7 +275,7 @@ void reaper(){
 
 //método ctrlc
 void ctrlc(){
-    //signal(SIGINT,ctrlc);
+    signal(SIGINT,ctrlc);
 
     
     if((jobs_list[0].pid > 0)&&(jobs_list[0].cmd!=mi_shell)){
