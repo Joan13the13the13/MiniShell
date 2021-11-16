@@ -279,11 +279,11 @@ void ctrlc(){
     char mensaje[1200];
 
     //mientras haya un hijo ejecutandose en primer plano (foreground) y no es un minishell
-    sprintf(mensaje, "[ctrlc()→ Soy el proceso con PID %d (%s), el proceso en foreground es %d (%s)]\n",getpid(),mi_shell,jobs_list[0].pid,jobs_list[0].cmd);
+    sprintf(mensaje, "\n[ctrlc()→ Soy el proceso con PID %d (%s), el proceso en foreground es %d (%s)]\n",getpid(),mi_shell,jobs_list[0].pid,jobs_list[0].cmd);
     write(2,mensaje, strlen(mensaje));
 
     if(jobs_list[0].pid > 0){
-        if(jobs_list[0].cmd!=mi_shell){
+        if(strcmp(jobs_list[0].cmd,mi_shell)){
             //enviamos la señal SIGTERM al comando hijo que se esté ejecutando en primer plano
             kill(jobs_list[0].pid,SIGTERM);
         }else{
