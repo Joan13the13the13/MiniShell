@@ -60,6 +60,7 @@ void initJL();
 void reaper();
 void ctrlc();
 void ctrlz();
+void showJL();
 
 
 static char mi_shell[COMMAND_LINE_SIZE]; //variable global para guardar el nombre del minishell
@@ -205,27 +206,24 @@ int execute_line(char *line) {
             signal(SIGCHLD,SIG_DFL);
             signal(SIGINT, SIG_IGN);
 
-            fprintf(stderr, "\n[execute_line() --> PID hijo %d (%s) ",getpid(),args[0]);
+            fprintf(stderr, "[execute_line() --> PID hijo %d (%s)]\n",getpid(),command_line);
             execvp(args[0],args);
-            fprintf(stderr, "El comando no se ha ejecutado correctamente");
+            fprintf(stderr, "[execute_line() --> El comando no se ha ejecutado correctamente]\n");
             exit(-1);
 
         }else if (pid>0) {//padre
             //le recordamos al padre que si se produce ctr+c, realice esa rutina
-            //signal(SIGINT, ctrlc());
+            signal(SIGINT, ctrlc);
 
-            fprintf(stderr, "[execute_line() --> PID Padre %d (%s) ",getpid(),mi_shell);
-            printf("Soy el proceso padre, actualizare jobs_list[0]");
-            printf("  Mi pid es: %d\n",getpid());
-            
-            //Actualizamos la información del proceso padre
+            fprintf(stderr, "[execute_line() --> PID Padre %d (%s)]\n",getpid(),mi_shell);
             
             //actualizamos el pid con el pid del proceso hijo
             jobs_list[0].pid = pid;
+            
             //actualizamos el status a 'E'
             jobs_list[0].status = 'F';
             //actualizamos el cmd con el proceso hijo
-            strcpy(jobs_list[0].cmd, args[0]);
+            strcpy(jobs_list[0].cmd, command_line);
 
             //esperamos a la confirmación del cambio de estado del hijo
 
@@ -234,7 +232,6 @@ int execute_line(char *line) {
             while(jobs_list[0].pid > 0){ //mientras haya un hijo ejecutandose en primer plano (foreground)
                 pause();
             }
-
             //Reseteamos los valores de Job_list[0]
             initJL();
             
@@ -261,14 +258,17 @@ void initJL(){
 
 //método reaper
 void reaper(){
-
     signal(SIGCHLD,reaper);
     pid_t ended;
     int status;
+    char mensaje[1200];
 
     while ((ended=waitpid(-1, &status, WNOHANG)) > 0) {
+        sprintf(mensaje, "[reaper() --> Proceso hijo enterrado tiene PID = %d]\n", jobs_list[0].pid);
+        write(2,mensaje, strlen(mensaje));
         jobs_list[0].pid=0;
         jobs_list[0].status='F';
+        memset(jobs_list[0].cmd,'\0',sizeof(jobs_list[0].cmd));
       }
 
 }
@@ -276,18 +276,25 @@ void reaper(){
 //método ctrlc
 void ctrlc(){
     signal(SIGINT,ctrlc);
+    char mensaje[1200];
 
-    
-    if((jobs_list[0].pid > 0)&&(jobs_list[0].cmd!=mi_shell)){
-         //mientras haya un hijo ejecutandose en primer plano (foreground) y no es un minishell
-         printf( "\n[ctrlc()→ Soy el proceso con PID %d (%s), el proceso en foreground es %d (%s)] ",getpid(),mi_shell,jobs_list[0].pid,jobs_list[0].cmd);
-        kill(jobs_list[0].pid,SIGTERM);
+    //mientras haya un hijo ejecutandose en primer plano (foreground) y no es un minishell
+    sprintf(mensaje, "[ctrlc()→ Soy el proceso con PID %d (%s), el proceso en foreground es %d (%s)]\n",getpid(),mi_shell,jobs_list[0].pid,jobs_list[0].cmd);
+    write(2,mensaje, strlen(mensaje));
+
+    if(jobs_list[0].pid > 0){
+        if(jobs_list[0].cmd!=mi_shell){
+            //enviamos la señal SIGTERM al comando hijo que se esté ejecutando en primer plano
+            kill(jobs_list[0].pid,SIGTERM);
+        }else{
+            sprintf(mensaje, "[ctrlc()→ Señal SIGTERM no enviada debido a que el proceso en foreground es el shell]\n");
+            write(2,mensaje, strlen(mensaje));
+        }
     }else{
-        printf( "\n[ctrlc() --> Soy el proceso con PID %d (%s)] ",getpid(),mi_shell);
-        printf("\nSeñal 15 no enviada por %d (%s) debido a que no hay proceso en foreground]", getpid(),mi_shell);
+        sprintf(mensaje, "[ctrlc()→ Señal SIGTERM no enviada debido a que no hay proceso en foreground]\n");
+        write(2,mensaje, strlen(mensaje));
     }
 
-    //errores
 }
 
 //método ctrlz NIVEL C
@@ -295,7 +302,11 @@ void ctrlz(){
 
 }
 
-
+void showJL(){
+    for(int i=0;i<5;i++){
+        printf("\nJobs_List[%d]: pid(%d),status(%c),cmd(%s).",i,jobs_list[i].pid,jobs_list[i].status,jobs_list[i].cmd);
+    }
+}
 
 int main(int argc, char *argv[]) {
     //dejamos claro al padre que si se producen estas señales 
@@ -317,6 +328,7 @@ int main(int argc, char *argv[]) {
     while (1) {
         if (read_line(line)) { // !=NULL
             execute_line(line);
+            
         }
     }
     return 0;
