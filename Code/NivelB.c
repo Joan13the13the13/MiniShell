@@ -57,7 +57,10 @@ int execute_line(char *line);
 
 //métodos añadidos por nosotros
 void initJL();
-void updtJL();
+void reaper();
+void ctrlc();
+void ctrlz();
+
 
 static char mi_shell[COMMAND_LINE_SIZE]; //variable global para guardar el nombre del minishell
 
@@ -199,32 +202,42 @@ int execute_line(char *line) {
         if(pid==0){//hijo
 
             //NIVEL B
-            //signal(SIGCHLD,SIG_DFL);
-            //signal(SIGINT, SIG_IGN);
+            signal(SIGCHLD,SIG_DFL);
+            signal(SIGINT, SIG_IGN);
 
+            fprintf(stderr, "\n[execute_line() --> PID hijo %d (%s) ",getpid(),args[0]);
             execvp(args[0],args);
-            fprintf(stderr, "No se ha ejecutado correctamente el execvp.");
-            printf("Mi pid es: %d",getpid());
+            fprintf(stderr, "El comando no se ha ejecutado correctamente");
             exit(-1);
 
         }else if (pid>0) {//padre
             //le recordamos al padre que si se produce ctr+c, realice esa rutina
             //signal(SIGINT, ctrlc());
 
+            fprintf(stderr, "[execute_line() --> PID Padre %d (%s) ",getpid(),mi_shell);
             printf("Soy el proceso padre, actualizare jobs_list[0]");
-            printf("Mi pid es: %d",getpid());
-            //Actualizamos la información del proceso padre
-            updtJL(args[0], pid);
-            //esperamos a la confirmación del cambio de estado del hijo
+            printf("  Mi pid es: %d\n",getpid());
             
+            //Actualizamos la información del proceso padre
+            
+            //actualizamos el pid con el pid del proceso hijo
+            jobs_list[0].pid = pid;
+            //actualizamos el status a 'E'
+            jobs_list[0].status = 'F';
+            //actualizamos el cmd con el proceso hijo
+            strcpy(jobs_list[0].cmd, args[0]);
+
+            //esperamos a la confirmación del cambio de estado del hijo
+
             //NIVEL B
-            wait(NULL); //lo substituimos por signal(SIGCHLD,reaper());
-            //while(Job_list[0].pid > 0){ //mientras haya un hijo ejecutandose en primer plano (foreground)
-                //pause();
-            //}
+            //wait(&status); //lo substituimos por signal(SIGCHLD,reaper());
+            while(jobs_list[0].pid > 0){ //mientras haya un hijo ejecutandose en primer plano (foreground)
+                pause();
+            }
 
             //Reseteamos los valores de Job_list[0]
             initJL();
+            
         }
         
         #if DEBUGN3
@@ -234,15 +247,6 @@ int execute_line(char *line) {
     return 0;
 }
 
-//método para actualizar los valores de Job_list[0] con los valores del hijo
-void updtJL(char *args, pid_t pid){
-    //actualizamos el pid con el pid del proceso hijo
-    jobs_list[0].pid = pid;
-    //actualizamos el status a 'E'
-    jobs_list[0].status = 'E';
-    //actualizamos el cmd con el proceso hijo
-    strcpy(jobs_list[0].cmd, args[0]);
-}
 
 //método para resetear los valores de Job_list[0]
 void initJL(){
@@ -255,12 +259,50 @@ void initJL(){
     memset(jobs_list[0].cmd,'\0',sizeof(jobs_list[0].cmd));
 }
 
+//método reaper
+void reaper(){
+
+    signal(SIGCHLD,reaper);
+    pid_t ended;
+    int status;
+
+    while ((ended=waitpid(-1, &status, WNOHANG)) > 0) {
+        jobs_list[0].pid=0;
+        jobs_list[0].status='F';
+      }
+
+}
+
+//método ctrlc
+void ctrlc(){
+    //signal(SIGINT,ctrlc);
+
+    
+    if((jobs_list[0].pid > 0)&&(jobs_list[0].cmd!=mi_shell)){
+         //mientras haya un hijo ejecutandose en primer plano (foreground) y no es un minishell
+         printf( "\n[ctrlc()→ Soy el proceso con PID %d (%s), el proceso en foreground es %d (%s)] ",getpid(),mi_shell,jobs_list[0].pid,jobs_list[0].cmd);
+        kill(jobs_list[0].pid,SIGTERM);
+    }else{
+        printf( "\n[ctrlc() --> Soy el proceso con PID %d (%s)] ",getpid(),mi_shell);
+        printf("\nSeñal 15 no enviada por %d (%s) debido a que no hay proceso en foreground]", getpid(),mi_shell);
+    }
+
+    //errores
+}
+
+//método ctrlz NIVEL C
+void ctrlz(){
+
+}
+
+
+
 int main(int argc, char *argv[]) {
     //dejamos claro al padre que si se producen estas señales 
     //tenemos que hacer estas acciones
-    //signal(SIGCHLD,reaper());
-    //signal(SIGINT, ctrlc());
-    //signal(SIGTSTP, ctrlz());
+    signal(SIGCHLD,reaper);
+    signal(SIGINT, ctrlc);
+    signal(SIGTSTP, ctrlz);
 
     char line[COMMAND_LINE_SIZE];
     memset(line, 0, COMMAND_LINE_SIZE);
