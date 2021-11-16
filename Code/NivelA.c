@@ -195,21 +195,38 @@ int execute_line(char *line) {
             return 1;
         }
         pid=fork();//creamos un proceso hijo
-        if(pid==0){
+
+        if(pid==0){//hijo
+
+            //NIVEL B
+            //signal(SIGCHLD,SIG_DFL);
+            //signal(SIGINT, SIG_IGN);
+
             execvp(args[0],args);
             fprintf(stderr, "No se ha ejecutado correctamente el execvp.");
+            printf("Mi pid es: %d",getpid());
             exit(-1);
-        }else if (pid>0) {
+
+        }else if (pid>0) {//padre
+            //le recordamos al padre que si se produce ctr+c, realice esa rutina
+            //signal(SIGINT, ctrlc());
+
             printf("Soy el proceso padre, actualizare jobs_list[0]");
+            printf("Mi pid es: %d",getpid());
             //Actualizamos la información del proceso padre
             updtJL(args[0], pid);
-            wait(NULL);
+            //esperamos a la confirmación del cambio de estado del hijo
+            
+            //NIVEL B
+            wait(NULL); //lo substituimos por signal(SIGCHLD,reaper());
+            //while(Job_list[0].pid > 0){ //mientras haya un hijo ejecutandose en primer plano (foreground)
+                //pause();
+            //}
+
+            //Reseteamos los valores de Job_list[0]
             initJL();
         }
         
-
-        //esperamos a la confirmación del cambio de estado del hijo
-        //wait(NULL);
         #if DEBUGN3
             fprintf(stderr, GRIS "[execute_line()→ PID padre: %d]\n" RESET_FORMATO, getpid());
         #endif
@@ -217,6 +234,7 @@ int execute_line(char *line) {
     return 0;
 }
 
+//método para actualizar los valores de Job_list[0] con los valores del hijo
 void updtJL(char *args, pid_t pid){
     //actualizamos el pid con el pid del proceso hijo
     jobs_list[0].pid = pid;
@@ -226,6 +244,7 @@ void updtJL(char *args, pid_t pid){
     strcpy(jobs_list[0].cmd, args[0]);
 }
 
+//método para resetear los valores de Job_list[0]
 void initJL(){
     //Ponemos el pid a 0
     jobs_list[0].pid = 0;
@@ -237,6 +256,12 @@ void initJL(){
 }
 
 int main(int argc, char *argv[]) {
+    //dejamos claro al padre que si se producen estas señales 
+    //tenemos que hacer estas acciones
+    signal(SIGCHLD,reaper());
+    signal(SIGINT, ctrlc());
+    signal(SIGTSTP, ctrlz());
+
     char line[COMMAND_LINE_SIZE];
     memset(line, 0, COMMAND_LINE_SIZE);
 
