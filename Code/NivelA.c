@@ -47,7 +47,7 @@ int check_internal(char **args);
 int internal_cd(char **args);
 int internal_export(char **args);
 int internal_source(char **args);
-int internal_jobs();
+int internal_jobs(char **args);
 int internal_bg(char **args);
 int internal_fg(char **args);
 
@@ -79,7 +79,7 @@ int check_internal(char **args) {
     if (!strcmp(args[0], "source"))
         return internal_source(args);
     if (!strcmp(args[0], "jobs"))
-        return internal_jobs();
+        return internal_jobs(args);
     if (!strcmp(args[0], "bg"))
         return internal_bg(args);
     if (!strcmp(args[0], "fg"))
@@ -258,9 +258,9 @@ void initJL(){
 int main(int argc, char *argv[]) {
     //dejamos claro al padre que si se producen estas señales 
     //tenemos que hacer estas acciones
-    signal(SIGCHLD,reaper());
-    signal(SIGINT, ctrlc());
-    signal(SIGTSTP, ctrlz());
+    //signal(SIGCHLD,reaper());
+    //signal(SIGINT, ctrlc());
+    //signal(SIGTSTP, ctrlz());
 
     char line[COMMAND_LINE_SIZE];
     memset(line, 0, COMMAND_LINE_SIZE);
