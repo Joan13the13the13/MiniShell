@@ -61,6 +61,7 @@ void reaper();
 void ctrlc();
 void ctrlz();
 void showJL();
+int is_background(char **args);
 
 
 static char mi_shell[COMMAND_LINE_SIZE]; //variable global para guardar el nombre del minishell
@@ -189,6 +190,7 @@ int execute_line(char *line) {
     char *args[ARGS_SIZE];
     pid_t pid, status;
     char command_line[COMMAND_LINE_SIZE];
+    //int bkg = Is_Background(); --> si el comando tiene un & --> 1     else ---> 0
 
     //copiamos la línea de comandos sin '\n' para guardarlo en el array de structs de los procesos
     memset(command_line, '\0', sizeof(command_line)); 
@@ -205,6 +207,8 @@ int execute_line(char *line) {
             //NIVEL B
             signal(SIGCHLD,SIG_DFL);
             signal(SIGINT, SIG_IGN);
+            //NIVEL C
+            signal(SIGTSTP, SIG_IGN);
 
             fprintf(stderr, "[execute_line() --> PID hijo %d (%s)]\n",getpid(),command_line);
             execvp(args[0],args);
@@ -214,26 +218,29 @@ int execute_line(char *line) {
         }else if (pid>0) {//padre
             //le recordamos al padre que si se produce ctr+c, realice esa rutina
             signal(SIGINT, ctrlc);
+            signal(SIGTSTP,ctrlz);
 
             fprintf(stderr, "[execute_line() --> PID Padre %d (%s)]\n",getpid(),mi_shell);
             
+            //if(!bkg){
             //actualizamos el pid con el pid del proceso hijo
             jobs_list[0].pid = pid;
-            
             //actualizamos el status a 'E'
-            jobs_list[0].status = 'F';
+            jobs_list[0].status = 'E';
             //actualizamos el cmd con el proceso hijo
             strcpy(jobs_list[0].cmd, command_line);
 
             //esperamos a la confirmación del cambio de estado del hijo
-
             //NIVEL B
             //wait(&status); //lo substituimos por signal(SIGCHLD,reaper());
             while(jobs_list[0].pid > 0){ //mientras haya un hijo ejecutandose en primer plano (foreground)
                 pause();
             }
             //Reseteamos los valores de Job_list[0]
-            initJL();
+            //initJL();
+            }else{
+                    //ERROR FORK
+           // }
             
         }
         
@@ -264,12 +271,17 @@ void reaper(){
     char mensaje[1200];
 
     while ((ended=waitpid(-1, &status, WNOHANG)) > 0) {
+        if(ended == jobs_list[0].pid){
         sprintf(mensaje, "[reaper() --> Proceso hijo enterrado tiene PID = %d]\n", jobs_list[0].pid);
         write(2,mensaje, strlen(mensaje));
         jobs_list[0].pid=0;
         jobs_list[0].status='F';
         memset(jobs_list[0].cmd,'\0',sizeof(jobs_list[0].cmd));
+      }else{
+          // int pos = JobsListFind() --> devuelve posición del proceso en background
+          //JobsListRemove(pos) --> eliminar proceso de la lista y coger el proceso de la ultima posición y poner-lo en pos
       }
+    }
 
 }
 
@@ -294,12 +306,20 @@ void ctrlc(){
         sprintf(mensaje, "[ctrlc()→ Señal SIGTERM no enviada debido a que no hay proceso en foreground]\n");
         write(2,mensaje, strlen(mensaje));
     }
+    printf("\n");
+    fflush(stdout);
 
 }
 
 //método ctrlz NIVEL C
 void ctrlz(){
-
+    //kill(pid, SIGSTOP);
+    //if (jobs_list[0].pid>0){
+        //detener proceso(enviar señal SIGSTOP)
+        //jobs_list.add(pid,'D',cmd); Aumentar tamaño lista
+        //
+    //}
+    //jobs_list
 }
 
 void showJL(){
@@ -307,6 +327,20 @@ void showJL(){
         printf("\nJobs_List[%d]: pid(%d),status(%c),cmd(%s).",i,jobs_list[i].pid,jobs_list[i].status,jobs_list[i].cmd);
     }
 }
+
+int is_background(char **args){
+    const char *argsAUX=args;
+    char *find = "&";
+    char *ptr = strchr(argsAUX, find);
+
+    if(ptr){
+        //int index = ptr - args;
+        //**args(index)='\0';
+        size_t index = strcspn(argsAUX, find);
+        return 1;
+    }
+    return 0;
+} 
 
 int main(int argc, char *argv[]) {
     //dejamos claro al padre que si se producen estas señales 
