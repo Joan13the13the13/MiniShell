@@ -167,7 +167,6 @@ char *read_line(char *line) {
             exit(0);
         }   
     }
-    printf("He acabado de leer el comando");
     return ptr;
 }
 
@@ -209,7 +208,7 @@ int execute_line(char *line) {
             return 1;
         }
         //llamamos a la funcion is_background() para analizar si la linea de comandos hay un &
-        bkg = is_background(args); //si el comando tiene un & --> 1     else ---> 0
+        bkg = is_background(command_line); //si el comando tiene un & --> 1     else ---> 0
         pid=fork();//creamos un proceso hijo
 
         if(pid==0){//hijo
@@ -233,7 +232,7 @@ int execute_line(char *line) {
 
             fprintf(stderr, "[execute_line() --> PID Padre %d (%s)]\n",getpid(),mi_shell);
             
-            if(!bkg){//Foreground
+            if(bkg){//Foreground
             //actualizamos el pid con el pid del proceso hijo
             jobs_list[0].pid = pid;
             //actualizamos el status a 'E'
@@ -247,15 +246,12 @@ int execute_line(char *line) {
             while(jobs_list[0].pid > 0){ //mientras haya un hijo ejecutandose en primer plano (foreground)
                 pause();
             }
-            printf("Soy un proceso en foreground.");
             }else{//proceso en backgroubd
-                    jobs_list_add(pid, 'E', command_line);
+                    jobs_list_add(pid, 'E', args[0]);
             }
-            return 1;
             
         }else{
             //ERROR FORK
-            return -1;
         }
         
         #if DEBUGN3
@@ -275,7 +271,6 @@ void initJL(){
     jobs_list[0].status='N';
     //Ponemos todo \0 en el cmd de jobs list
     memset(jobs_list[0].cmd,'\0',sizeof(jobs_list[0].cmd));
-    return;
 }
 
 //método reaper
@@ -286,7 +281,7 @@ void reaper(){
     char mensaje[1200];
 
     while ((ended=waitpid(-1, &status, WNOHANG)) > 0) {
-        if(ended==jobs_list[0].pid) {
+        if(!jobs_list_find(ended)){//si esta en foreground (ended==jobs_list[0].pid)???
         sprintf(mensaje, "[reaper() --> Proceso hijo %d (%s) enterrado]\n", jobs_list[0].pid, jobs_list[0].cmd);
         write(2,mensaje, strlen(mensaje));
         jobs_list[0].pid=0;
@@ -301,10 +296,9 @@ void reaper(){
         jobs_list_remove(pos);
       }
     }
-    return;
+
 }
 
-/*
 //método ctrlc
 void ctrlc(){
     signal(SIGINT,ctrlc);
@@ -330,32 +324,6 @@ void ctrlc(){
     }
     printf("\n");
     fflush(stdout);
-    printf("He acabado la ejecución de ctrlc");
-
-}
-*/
-
-//método ctrlc
-void ctrlc(){
-    signal(SIGINT,ctrlc);
-
-    //mientras haya un hijo ejecutandose en primer plano (foreground) y no es un minishell
-    fprintf(stderr, "\n[ctrlc()→ Soy el proceso con PID %d (%s), el proceso en foreground es %d (%s)]\n",getpid(),mi_shell,jobs_list[0].pid,jobs_list[0].cmd);
-
-    if(jobs_list[0].pid > 0){
-        if(strcmp(jobs_list[0].cmd,mi_shell)){
-            //enviamos la señal SIGTERM al comando hijo que se esté ejecutando en primer plano
-            kill(jobs_list[0].pid,SIGTERM);
-            fprintf(stderr, "[ctrlc()→ Señal SIGTERM enviada]\n");
-        }else{
-            fprintf(stderr, "[ctrlc()→ Señal SIGTERM NO enviada debido a que el proceso en foreground es el shell]\n");
-        }
-    }else{
-        fprintf(stderr, "[ctrlc()→ Señal SIGTERM no enviada debido a que no hay proceso en foreground]\n");
-    }
-    printf("\n");
-    fflush(stdout);
-    printf("He acabado la ejecución de ctrlc");
 
 }
 
@@ -438,11 +406,11 @@ int jobs_list_find(pid_t pid){
 
 
 int jobs_list_remove(int pos){
+
     jobs_list[pos].pid = jobs_list[n_pids].pid;
     jobs_list[pos].status = jobs_list[n_pids].status;
     strcpy(jobs_list[pos].cmd, jobs_list[n_pids].cmd);
     n_pids--;
-
     return 0;
 }
 
